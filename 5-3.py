@@ -1,9 +1,11 @@
 # %%
+import numpy as np
 import sklearn.metrics
 from torchvision import models, datasets, transforms
 import matplotlib.pyplot as plt
 import torch
 from tqdm import tqdm
+import os
 
 # %% [markdown]
 The first thing to do - -load up a pretrained model.
@@ -37,13 +39,14 @@ the changes that need to be made.
 # %%
 transform = transforms.Compose([
     transforms.Grayscale(3),
-    transforms.RandomResizedCrop(224),
+    transforms.CenterCrop(224),
     transforms.ToTensor(),
 ])
 mnist = datasets.MNIST('./var', download=True)
 
 train = datasets.MNIST('./var', train=True, transform=transform)
-trainloader = torch.utils.data.DataLoader(train, batch_size=32, shuffle=True)
+trainloader = torch.utils.data.DataLoader(
+    train, batch_size=32, shuffle=True)
 test = datasets.MNIST('./var', train=False, transform=transform)
 testloader = torch.utils.data.DataLoader(
     test, batch_size=32, shuffle=True)
@@ -61,20 +64,18 @@ to the correct size - -now we turn to output.MNIST has 10 classes,
 so we need to tweak the final output layer - - which will be what is
 really being trained - - to 10 classes.
 
-#%%
+# %%
 vgg.classifier[-1]
 
-
-#%%
+# %%
 vgg.classifier[-1] = torch.nn.Linear(4096, 10)
 
-
-#%% [markdown]
+# %% [markdown]
 Let 's try this on a GPU. And we' ll add in tqdm as a
 progress bar - -this one is really nice since you can just
 wrap an enumerable such as the data loader.
 
-#%%
+# %%
 if torch.cuda.is_available():
     device = torch.device('cuda')
 else:
@@ -83,28 +84,32 @@ else:
 loss_function = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(vgg.parameters())
 
-
+# %%
 vgg.to(device)
+vgg.train()
 for epoch in range(16):
-    total_loss = 0
     for inputs, outputs in tqdm(trainloader):
-        inputs = inputs.to(device)
-        outputs = outputs.to(device)
+        inputs = inputs.to(device, non_blocking=True)
+        outputs = outputs.to(device, non_blocking=True)
         optimizer.zero_grad()
         results = vgg(inputs)
         loss = loss_function(results, outputs)
-        total_loss += loss.item()
         loss.backward()
         optimizer.step()
-    print("Loss: {0}".format(total_loss / len(trainloader)))
+    print("Last loss: {0}".format(loss))
 
 
-#%%
-for inputs, actual in testloader:
-    inputs = inputs.to(device)
-    results = vgg(inputs).argmax(dim=1).to('cpu').numpy()
-    accuracy = sklearn.metrics.accuracy_score(actual, results)
-    print(accuracy)
-    break
+# %%
+results_buffer = []
+actual_buffer = []
+with torch.no_grad():
+    vgg.eval()
+    for inputs, actual in testloader:
+        inputs = inputs.to(device, non_blocking=True)
+        results = vgg(inputs).argmax(dim=1).to('cpu').numpy()
+        results_buffer.append(results)
+        actual_buffer.append(actual)
 
-print(sklearn.metrics.classification_report(actual, results))
+print(sklearn.metrics.classification_report(
+    np.concatenate(actual_buffer),
+    np.concatenate(results_buffer)))
