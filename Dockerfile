@@ -18,6 +18,7 @@ RUN wget --quiet https://repo.anaconda.com/archive/Anaconda3-5.3.0-Linux-x86_64.
     echo "conda activate base" >> ~/.bashrc
 
 RUN python -m spacy download en
+RUN python -m spacy download en_core_web_lg
 
 
 #all the code samples for the video series
