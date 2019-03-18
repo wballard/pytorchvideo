@@ -6,19 +6,22 @@ import pandas
 from torch.utils.data import Dataset
 import tqdm
 import spacy
+import numpy as np
 nlp = spacy.load('en')
 
 # %%
 pandas.read_csv('sentiment.tsv', sep='\t', header=0).iloc[0]
 
 # %%
+
+
 class SentimentDataset(Dataset):
     def __init__(self):
         self.data = pandas.read_csv('sentiment.tsv', sep='\t', header=0)
         # one hot encoding prep
         self.ordinals = {}
         for sample in tqdm.tqdm(self.data.Phrase):
-            for token in nlp(sample, disable=['parser', 'tagger', 'ner']):
+            for token in nlp(sample.lower(), disable=['parser', 'tagger', 'ner']):
                 if token.text not in self.ordinals:
                     self.ordinals[token.text] = len(self.ordinals)
 
@@ -30,7 +33,7 @@ class SentimentDataset(Dataset):
             idx = idx.item()
         sample = self.data.iloc[idx]
         bag_of_words = torch.zeros(len(self.ordinals))
-        for token in nlp(sample.Phrase, disable=['parser', 'tagger', 'ner']):
+        for token in nlp(sample.Phrase.lower(), disable=['parser', 'tagger', 'ner']):
             bag_of_words[self.ordinals[token.text]] += 1
 
         return bag_of_words, torch.tensor(sample.Sentiment, dtype=torch.float)
@@ -40,6 +43,15 @@ sentiment = SentimentDataset()
 
 # %%
 sentiment[0]
+
+
+# %%[markdown]
+Let us take a look at how many features we are really talking about.With words
+encoded as one hot - -it is somewhat like a pixel, and the sentence is somewhat
+like a bitmap.
+
+# %%
+len(sentiment.ordinals)
 
 
 # %%
@@ -55,7 +67,7 @@ testloader = torch.utils.data.DataLoader(
 
 len(test), len(train)
 
-#%%
+# %%
 # Now we have a regression problem! We 'll try to predict the sentiment
 # using our approach for simple regression from earlier videos.
 
@@ -65,19 +77,15 @@ class Model(torch.nn.Module):
 
     def __init__(self, input_dimensions, size=128):
         super().__init__()
-        self.norm_one = torch.nn.BatchNorm1d(input_dimensions)
         self.layer_one = torch.nn.Linear(input_dimensions, size)
         self.activation_one = torch.nn.ReLU()
-        self.norm_two = torch.nn.BatchNorm1d(size)
         self.layer_two = torch.nn.Linear(size, size)
         self.activation_two = torch.nn.ReLU()
         self.shape_outputs = torch.nn.Linear(size, 1)
 
     def forward(self, inputs):
-        buffer = self.norm_one(inputs)
-        buffer = self.layer_one(buffer)
+        buffer = self.layer_one(inputs)
         buffer = self.activation_one(buffer)
-        buffer = self.norm_two(buffer)
         buffer = self.layer_two(buffer)
         buffer = self.activation_two(buffer)
         buffer = self.shape_outputs(buffer)
@@ -103,7 +111,6 @@ for epoch in range(4):
     print("Loss: {0}".format(torch.tensor(losses).mean()))
 
 # %%
-import numpy as np
 results_buffer = []
 actual_buffer = []
 with torch.no_grad():
