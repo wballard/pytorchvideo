@@ -189,8 +189,8 @@ results_buffer = []
 actual_buffer = []
 with torch.no_grad():
     model.eval()
-    for inputs, outputs in testloader:
-        results = model(inputs).detach().numpy()
+    for inputs, lengths, outputs in testloader:
+        results = model(inputs, lengths).detach().numpy()
         actual = outputs.numpy()
         results_buffer.append(results)
         actual_buffer.append(actual)
