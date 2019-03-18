@@ -141,15 +141,15 @@ class Model(torch.nn.Module):
     def forward(self, inputs, lengths):
         # need to sort the sequences for pytorch -- which we
         # did in our collation above
+        number_of_batches = lengths.shape[0]
         packed_inputs = torch.nn.utils.rnn.pack_padded_sequence(
             inputs,
             lengths,
             batch_first=True)
-        buffer, hidden = self.seq(packed_inputs)
-        # and now -- we unpack
-        buffer, _ = torch.nn.utils.rnn.pad_packed_sequence(
-            buffer,
-            batch_first=True)
+        buffer, (hidden, cell) = self.seq(packed_inputs)
+        # flatten out the last hidden state -- this will
+        # be the tensor representing each batch
+        buffer = hidden.view(number_of_batches, -1)
         # and feed along to a simple output network with
         # a single output cell for regression
         buffer = self.layer_one(buffer)
