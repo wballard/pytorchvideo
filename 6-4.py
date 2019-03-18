@@ -1,9 +1,5 @@
-# %%[markdown]
-That last model did not work very well - -so now for a different
-technique that treats text as a sequence, this will involve recurrent
-networks, using a particular kind called an LSTM.
 
-#%%
+# %%
 import numpy as np
 import spacy
 import tqdm
@@ -12,6 +8,12 @@ import pandas
 import torch
 import sklearn.metrics
 import torch.utils.data
+
+# %%[markdown]
+That one hot + neural network model did not work very well!
+Sso now for a different
+technique that treats text as a sequence, this will involve recurrent
+networks, using a particular kind called an LSTM.
 
 # %%
 nlp = spacy.load('en_core_web_lg')
@@ -30,7 +32,7 @@ model built over wikipedia.
 
 Here is an example word vector:
 
-# %%
+#%%
 for token in nlp('hello'):
     print(token)
     print(token.vector)
@@ -43,8 +45,6 @@ and return the length of each string in tokens.
 This is important for working with pytorch recurrent networks.
 
 # %%
-
-
 class SentimentDataset(Dataset):
     def __init__(self):
         self.data = pandas.read_csv('sentiment.tsv', sep='\t', header=0)
@@ -57,12 +57,16 @@ class SentimentDataset(Dataset):
             idx = idx.item()
         sample = self.data.iloc[idx]
         token_vectors = []
+        # switching off NER for a tiny speed boost
         for token in nlp(sample.Phrase.lower(), disable=['ner']):
             token_vectors.append(token.vector)
 
+        # tokens and length as inputs -- the length
+        # is needed to 'pack' variable length sequences
+        # output is the sentiment score 
         return (torch.tensor(token_vectors),
-            torch.tensor(len(token_vectors)),
-            torch.tensor(sample.Sentiment, dtype=torch.float))
+                torch.tensor(len(token_vectors)),
+                torch.tensor(sample.Sentiment, dtype=torch.float))
 
 
 sentiment = SentimentDataset()
@@ -74,7 +78,7 @@ sentiment[0]
 # to collate into fixed width as these will be
 # variable batches
 def collate(batch):
-    # sort indescending length order -- this is needed for 
+    # sort indescending length order -- this is needed for
     # padding seqeunces in pytorch
     batch.sort(key=lambda x: x[1], reverse=True)
     sequences, lengths, sentiments = zip(*batch)
@@ -84,6 +88,8 @@ def collate(batch):
     sentiments = torch.stack(sentiments)
     lengths = torch.stack(lengths)
     return sequences, lengths, sentiments
+
+
 number_for_testing = int(len(sentiment) * 0.05)
 number_for_training = len(sentiment) - number_for_testing
 train, test = torch.utils.data.random_split(sentiment,
@@ -126,6 +132,10 @@ class Model(torch.nn.Module):
     def __init__(self, input_dimensions, size=128, layers=1):
         super().__init__()
         self.seq = torch.nn.LSTM(input_dimensions, size, layers)
+        self.layer_one = torch.nn.Linear(size, size)
+        self.activation_one = torch.nn.ReLU()
+        self.layer_two = torch.nn.Linear(size, size)
+        self.activation_two = torch.nn.ReLU()
         self.shape_outputs = torch.nn.Linear(size, 1)
 
     def forward(self, inputs, lengths):
@@ -137,10 +147,17 @@ class Model(torch.nn.Module):
             batch_first=True)
         buffer, hidden = self.seq(packed_inputs)
         # and now -- we unpack
-        buffer, _ = torch.nn.utils.rnn.pad_packed_sequence(buffer)
-        # restore the original order so we match
-        # up with outputs!
-        return self.shape_outputs(buffer)
+        buffer, _ = torch.nn.utils.rnn.pad_packed_sequence(
+            buffer,
+            batch_first=True)
+        # and feed along to a simple output network with
+        # a single output cell for regression
+        buffer = self.layer_one(buffer)
+        buffer = self.activation_one(buffer)
+        buffer = self.layer_two(buffer)
+        buffer = self.activation_two(buffer)
+        buffer = self.shape_outputs(buffer)
+        return buffer
 
 
 # get the input dimensions from the first sample
@@ -149,28 +166,32 @@ model = Model(sentiment[0][0].shape[1])
 
 
 # %%
-optimizer=torch.optim.Adam(model.parameters())
-loss_function=torch.nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters())
+loss_function = torch.nn.MSELoss()
 model.train()
 for epoch in range(4):
-    losses=[]
+    losses = []
     for sequences, lengths, sentiments in tqdm.tqdm(trainloader):
         optimizer.zero_grad()
-        results=model(sequences, lengths)
-        loss=loss_function(results, sentiments)
+        results = model(sequences, lengths)
+        loss = loss_function(results, sentiments)
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
     print("Loss: {0}".format(torch.tensor(losses).mean()))
 
+# %% [markdown]
+And now - -we can score the results and see what the R2 values
+look like in comparison to the basic neural network model.
+
 # %%
-results_buffer=[]
-actual_buffer=[]
+results_buffer = []
+actual_buffer = []
 with torch.no_grad():
     model.eval()
     for inputs, outputs in testloader:
-        results=model(inputs).detach().numpy()
-        actual=outputs.numpy()
+        results = model(inputs).detach().numpy()
+        actual = outputs.numpy()
         results_buffer.append(results)
         actual_buffer.append(actual)
 
