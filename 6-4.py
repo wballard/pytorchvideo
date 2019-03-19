@@ -11,7 +11,7 @@ import torch.utils.data
 
 # %%[markdown]
 That one hot + neural network model did not work very well!
-Sso now for a different
+So now for a different
 technique that treats text as a sequence, this will involve recurrent
 networks, using a particular kind called an LSTM.
 
@@ -47,7 +47,10 @@ This is important for working with pytorch recurrent networks.
 # %%
 class SentimentDataset(Dataset):
     def __init__(self):
-        self.data = pandas.read_csv('sentiment.tsv', sep='\t', header=0)
+        self.data = pandas \
+            .read_csv('sentiment.tsv', sep='\t', header=0) \
+            .groupby('SentenceId') \
+            .first()
 
     def __len__(self):
         return len(self.data)
@@ -96,6 +99,7 @@ train, test = torch.utils.data.random_split(sentiment,
                                             [number_for_training, number_for_testing])
 trainloader = torch.utils.data.DataLoader(
     train, batch_size=32, shuffle=True,
+    num_workers=4,
     collate_fn=collate)
 testloader = torch.utils.data.DataLoader(
     test, batch_size=32, shuffle=True,
@@ -129,10 +133,11 @@ the boundaries on which to pack.
 # %%
 class Model(torch.nn.Module):
 
-    def __init__(self, input_dimensions, size=128, layers=1):
+    def __init__(self, input_dimensions, size=128, layers=2):
         super().__init__()
         self.seq = torch.nn.LSTM(input_dimensions, size, layers)
-        self.layer_one = torch.nn.Linear(size, size)
+        self.norm = torch.nn.LayerNorm(size * layers)
+        self.layer_one = torch.nn.Linear(size * layers, size)
         self.activation_one = torch.nn.ReLU()
         self.layer_two = torch.nn.Linear(size, size)
         self.activation_two = torch.nn.ReLU()
@@ -152,6 +157,7 @@ class Model(torch.nn.Module):
         buffer = hidden.view(number_of_batches, -1)
         # and feed along to a simple output network with
         # a single output cell for regression
+        buffer = self.norm(buffer)
         buffer = self.layer_one(buffer)
         buffer = self.activation_one(buffer)
         buffer = self.layer_two(buffer)
@@ -169,7 +175,7 @@ model = Model(sentiment[0][0].shape[1])
 optimizer = torch.optim.Adam(model.parameters())
 loss_function = torch.nn.MSELoss()
 model.train()
-for epoch in range(4):
+for epoch in range(16):
     losses = []
     for sequences, lengths, sentiments in tqdm.tqdm(trainloader):
         optimizer.zero_grad()
@@ -183,6 +189,7 @@ for epoch in range(4):
 # %% [markdown]
 And now - -we can score the results and see what the R2 values
 look like in comparison to the basic neural network model.
+
 
 # %%
 results_buffer = []

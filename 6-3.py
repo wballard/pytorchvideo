@@ -17,7 +17,10 @@ pandas.read_csv('sentiment.tsv', sep='\t', header=0).iloc[0]
 
 class SentimentDataset(Dataset):
     def __init__(self):
-        self.data = pandas.read_csv('sentiment.tsv', sep='\t', header=0)
+        self.data = pandas \
+            .read_csv('sentiment.tsv', sep='\t', header=0) \
+            .groupby('SentenceId') \
+            .first()
         # one hot encoding prep
         self.ordinals = {}
         for sample in tqdm.tqdm(self.data.Phrase):
@@ -99,7 +102,7 @@ model = Model(len(sentiment.ordinals))
 optimizer = torch.optim.Adam(model.parameters())
 loss_function = torch.nn.MSELoss()
 model.train()
-for epoch in range(4):
+for epoch in range(16):
     losses = []
     for inputs, outputs in tqdm.tqdm(trainloader):
         optimizer.zero_grad()
