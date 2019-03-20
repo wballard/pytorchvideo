@@ -12,7 +12,8 @@ import torch.utils.data
 # %%[markdown]
 That one hot + neural network model did not work very well!
 So now for a different
-technique that treats text as a sequence, this will involve recurrent
+technique that treats text as a sequence,
+this will involve recurrent
 networks, using a particular kind called an LSTM.
 
 # %%
@@ -22,12 +23,13 @@ nlp = spacy.load('en_core_web_lg')
 Using the same dataset of sentiments on movie reviews, we
 will use a pre-trained language model from spacy.
 
-Using wikipedia, spacy comes pretrained with word vectors, which
-are dense encodings - -so instead of one hot encoding, we use
-the word vector.
+Using wikipedia, spacy comes pretrained with word vectors,
+which are dense encodings, so instead of one hot encoding,
+we use the word vector.
 
-The nice thing about this is we actually do less work to set up
-our data - -AND - -our model starts with knowledge from the language
+The nice thing about this is we actually do less
+work to set up our data AND our model starts
+ with knowledge from the language
 model built over wikipedia.
 
 Here is an example word vector:
@@ -112,21 +114,20 @@ for batch in trainloader:
     break
 
 # %% [markdown]
-Now, this is still a regression problem, but instead of one hot
-encoded words and a plain nerual network, we will have sequences
+Now, this is still a regression problem, but instead of
+one hot encoded words and a plain nerual network,
+we will have sequences
 of word vectors, from the learned wikipedia model.
 
-These sequences in turn will be * packed * which is because they
-all have different lengths, run through the recurrent network
+These sequences in turn will be * packed * which
+is because they all have different lengths,
+run through the recurrent network
 which loops word vector by word vector to compute a final
 numerical representation of the whole sequence - -just like
 reading - -word for word in order.
 
-This is why we need the sequence lengths - -you need to know
+This is why we need the sequence lengths, you need to know
 the boundaries on which to pack.
-
-# Now we have a regression problem! We 'll try to predict the sentiment
-# using our approach for simple regression from earlier videos.
 
 
 # %%

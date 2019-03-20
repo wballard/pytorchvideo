@@ -68,10 +68,11 @@ testloader = torch.utils.data.DataLoader(
 
 class Model(torch.nn.Module):
 
-    def __init__(self, input_dimensions, size=32, layers=4):
+    def __init__(self, input_dimensions, size=128, layers=4, dropout=0.2):
         super().__init__()
-        self.seq = torch.nn.GRU(input_dimensions, size, layers)
+        self.seq = torch.nn.GRU(input_dimensions, size, layers, dropout=dropout)
         self.layer_one = torch.nn.Linear(size * layers, size)
+        self.layer_norm = torch.nn.LayerNorm(size)
         self.activation_one = torch.nn.ReLU()
         self.layer_two = torch.nn.Linear(size, size)
         self.activation_two = torch.nn.ReLU()
@@ -94,8 +95,10 @@ class Model(torch.nn.Module):
         # and feed along to a simple output network with
         # a single output cell for regression
         buffer = self.layer_one(buffer)
+        buffer = self.layer_norm(buffer)
         buffer = self.activation_one(buffer)
         buffer = self.layer_two(buffer)
+        buffer = self.layer_norm(buffer)
         buffer = self.activation_two(buffer)
         buffer = self.shape_outputs(buffer)
         return buffer
@@ -108,16 +111,18 @@ model = Model(sentiment[0][0].shape[1])
 optimizer = torch.optim.Adam(model.parameters())
 loss_function = torch.nn.CrossEntropyLoss()
 model.train()
-for epoch in range(32):
+for epoch in range(128):
     losses = []
-    for sequences, lengths, sentiments in tqdm.tqdm(trainloader):
-        optimizer.zero_grad()
-        results = model(sequences, lengths)
-        loss = loss_function(results, sentiments)
-        losses.append(loss.item())
-        loss.backward()
-        optimizer.step()
-    print("Loss: {0}".format(torch.tensor(losses).mean()))
+    with tqdm.tqdm(trainloader, unit='batches') as progress:
+        for sequences, lengths, sentiments in progress:
+            optimizer.zero_grad()
+            results = model(sequences, lengths)
+            loss = loss_function(results, sentiments)
+            losses.append(loss.item())
+            loss.backward()
+            optimizer.step()
+            progress.set_postfix(loss=torch.tensor(losses).mean(), refresh=False)
+            progress.update()
 
 
 # %%
