@@ -69,7 +69,7 @@ class SentimentDataset(Dataset):
         # output is the sentiment score 
         return (torch.tensor(token_vectors),
                 torch.tensor(len(token_vectors)),
-                torch.tensor(sample.Sentiment, dtype=torch.float))
+                torch.tensor(sample.Sentiment))
 
 
 sentiment = SentimentDataset()
@@ -99,7 +99,6 @@ train, test = torch.utils.data.random_split(sentiment,
                                             [number_for_training, number_for_testing])
 trainloader = torch.utils.data.DataLoader(
     train, batch_size=32, shuffle=True,
-    num_workers=4,
     collate_fn=collate)
 testloader = torch.utils.data.DataLoader(
     test, batch_size=32, shuffle=True,
@@ -133,15 +132,14 @@ the boundaries on which to pack.
 # %%
 class Model(torch.nn.Module):
 
-    def __init__(self, input_dimensions, size=128, layers=2):
+    def __init__(self, input_dimensions, size=128, layers=1):
         super().__init__()
         self.seq = torch.nn.LSTM(input_dimensions, size, layers)
-        self.norm = torch.nn.LayerNorm(size * layers)
         self.layer_one = torch.nn.Linear(size * layers, size)
         self.activation_one = torch.nn.ReLU()
         self.layer_two = torch.nn.Linear(size, size)
         self.activation_two = torch.nn.ReLU()
-        self.shape_outputs = torch.nn.Linear(size, 1)
+        self.shape_outputs = torch.nn.Linear(size, 5)
 
     def forward(self, inputs, lengths):
         # need to sort the sequences for pytorch -- which we
@@ -152,12 +150,13 @@ class Model(torch.nn.Module):
             lengths,
             batch_first=True)
         buffer, (hidden, cell) = self.seq(packed_inputs)
+        # batch first...
+        buffer = hidden.permute(1, 0, 2)
         # flatten out the last hidden state -- this will
         # be the tensor representing each batch
-        buffer = hidden.view(number_of_batches, -1)
+        buffer = buffer.contiguous().view(number_of_batches, -1)
         # and feed along to a simple output network with
         # a single output cell for regression
-        buffer = self.norm(buffer)
         buffer = self.layer_one(buffer)
         buffer = self.activation_one(buffer)
         buffer = self.layer_two(buffer)
@@ -173,9 +172,9 @@ model = Model(sentiment[0][0].shape[1])
 
 # %%
 optimizer = torch.optim.Adam(model.parameters())
-loss_function = torch.nn.MSELoss()
+loss_function = torch.nn.CrossEntropyLoss()
 model.train()
-for epoch in range(16):
+for epoch in range(64):
     losses = []
     for sequences, lengths, sentiments in tqdm.tqdm(trainloader):
         optimizer.zero_grad()
@@ -186,23 +185,18 @@ for epoch in range(16):
         optimizer.step()
     print("Loss: {0}".format(torch.tensor(losses).mean()))
 
-# %% [markdown]
-And now - -we can score the results and see what the R2 values
-look like in comparison to the basic neural network model.
 
 
 # %%
-results_buffer = []
-actual_buffer = []
+results_buffer=[]
+actual_buffer=[]
 with torch.no_grad():
     model.eval()
-    for inputs, lengths, outputs in testloader:
-        results = model(inputs, lengths).detach().numpy()
-        actual = outputs.numpy()
+    for test_seq, test_len, test_sentiment in testloader:
+        results=model(test_seq, test_len).argmax(dim=1).numpy()
         results_buffer.append(results)
-        actual_buffer.append(actual)
+        actual_buffer.append(test_sentiment)
 
-
-print(sklearn.metrics.r2_score(
+print(sklearn.metrics.classification_report(
     np.concatenate(actual_buffer),
     np.concatenate(results_buffer)))

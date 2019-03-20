@@ -12,6 +12,12 @@ nlp = spacy.load('en')
 # %%
 pandas.read_csv('sentiment.tsv', sep='\t', header=0).iloc[0]
 
+
+#%%[markdown]
+OK - -now we will use one hot encoding to represent words as bitmaps
+which are effectively 'word pixels' - but count the number of
+times each word appears -- this is the basic bag of words model
+
 # %%
 
 
@@ -39,7 +45,7 @@ class SentimentDataset(Dataset):
         for token in nlp(sample.Phrase.lower(), disable=['parser', 'tagger', 'ner']):
             bag_of_words[self.ordinals[token.text]] += 1
 
-        return bag_of_words, torch.tensor(sample.Sentiment, dtype=torch.float)
+        return bag_of_words, torch.tensor(sample.Sentiment)
 
 
 sentiment = SentimentDataset()
@@ -70,10 +76,13 @@ testloader = torch.utils.data.DataLoader(
 
 len(test), len(train)
 
-# %%
-# Now we have a regression problem! We 'll try to predict the sentiment
-# using our approach for simple regression from earlier videos.
+#%%
+# and let's take a look at the output values
+sentiment.data.Sentiment.unique()
 
+# %%
+# Now we have a simple classification problem with 5 classes
+# let's use the most basic network possible and see what happens
 
 # %%
 class Model(torch.nn.Module):
@@ -84,7 +93,7 @@ class Model(torch.nn.Module):
         self.activation_one = torch.nn.ReLU()
         self.layer_two = torch.nn.Linear(size, size)
         self.activation_two = torch.nn.ReLU()
-        self.shape_outputs = torch.nn.Linear(size, 1)
+        self.shape_outputs = torch.nn.Linear(size, 5)
 
     def forward(self, inputs):
         buffer = self.layer_one(inputs)
@@ -100,7 +109,7 @@ model = Model(len(sentiment.ordinals))
 
 # %%
 optimizer = torch.optim.Adam(model.parameters())
-loss_function = torch.nn.MSELoss()
+loss_function = torch.nn.CrossEntropyLoss()
 model.train()
 for epoch in range(16):
     losses = []
@@ -113,18 +122,20 @@ for epoch in range(16):
         optimizer.step()
     print("Loss: {0}".format(torch.tensor(losses).mean()))
 
+#%%[markdown]
+And now a classificartion report to see how well we did
+in recall and accuracy.
+
 # %%
 results_buffer = []
 actual_buffer = []
 with torch.no_grad():
     model.eval()
-    for inputs, outputs in testloader:
-        results = model(inputs).detach().numpy()
-        actual = outputs.numpy()
+    for inputs, actual in testloader:
+        results = model(inputs).argmax(dim=1).numpy()
         results_buffer.append(results)
         actual_buffer.append(actual)
 
-
-print(sklearn.metrics.r2_score(
+print(sklearn.metrics.classification_report(
     np.concatenate(actual_buffer),
     np.concatenate(results_buffer)))
