@@ -101,28 +101,6 @@ And there is one other trick - -custom weight initialization.This is from
 the original DCGAN paper.Subclass the models and have the initial weights
 and parameters set with this distribution to help training.
 
-# %%
-
-
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-
-
-class GeneratorCustom(Generator):
-    def __init__(self, context, features, channels):
-        super.__init__(context, features, channels)
-        weights_init(self)
-
-
-class DiscriminatorCustom(Discriminator):
-    def __init__(self, features, channels):
-        super.__init__(features, channels)
-        weights_init(self)
 
 
 # %%[markdown]
