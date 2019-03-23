@@ -126,7 +126,8 @@ class DiscriminatorCustom(Discriminator):
 
 
 # %%[markdown]
-And now for training, we will work on our good friends the MNIST digits.
+And now for training,
+we will work on our good friends the MNIST digits.
 
 # %%
 batch_size = 128
